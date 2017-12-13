@@ -1,0 +1,46 @@
+	// Block index
+  	int block_col = blockIdx.x;
+  	int block_row = blockIdx.y;
+
+	 // Thread index
+  	int thread_col = threadIdx.x;
+  	int thread_row = threadIdx.y;
+
+  
+  	int aBegin = N * blockDim.x * block_row;
+  	int aEnd = aBegin + N-1;
+  	int bBegin = blockDim.x * block_col;
+  	int bStep = N * blockDim.x;
+  	double Csub = 0;
+  	
+
+  	for (int a=aBegin, b=bBegin, istep=0; a <= aEnd; a+= blockDim.x, b+=bStep, ++istep){
+
+    	__shared__ double As[BLOCK_SIZE][BLOCK_SIZE];
+    	__shared__ double Bs[BLOCK_SIZE][BLOCK_SIZE];
+
+    	if ((istep*blockDim.x+thread_col < N) && (block_row*blockDim.x+ thread_row < N))
+      		As[thread_row][thread_col] = X[a + N * thread_row + thread_col];
+    	else
+      		As[thread_row][thread_col] = 0;
+      
+    	if ((block_col*blockDim.x+thread_col < N) && (istep*blockDim.x + thread_row < N))
+      		Bs[thread_row][thread_col] = Y[b + N * thread_row + thread_col];
+    	else
+      		Bs[thread_row][thread_col] = 0;
+
+    	__syncthreads();
+
+    	// calculate the cell
+    	for (int k = 0; k < blockDim.x; ++k)
+      		Csub += As[thread_row][k] * Bs[k][thread_col];
+
+    	__syncthreads();
+  	}
+
+  	// Write the block sub-matrix to global memory;
+  	// each thread writes one element
+  	int c = N * blockDim.x * block_row + blockDim.x * block_col;
+  	if ((block_col*blockDim.x+thread_col < N) && (block_row*blockDim.x+ thread_row < N))
+    	A[c + N * thread_row + thread_col] = alpha * Csub + beta * A[c +N * thread_row + thread_col];
+
